@@ -33,12 +33,11 @@ public class CustomersApp {
 
   @QueryMapping
   Customer customer(@Argument long id, DataFetchingFieldSelectionSet graphqlFields) {
-    String jpql;
+    String jpql = "select c from Customer c";
     if (graphqlFields.contains("addresses")) {
-      jpql = "select c from Customer c left join fetch c.addresses where c.id = :id";
-    } else {
-      jpql = "select c from Customer c where c.id = :id";
+      jpql += " left join fetch c.addresses"; // ONE query, joined only if asked
     }
+    jpql += " where c.id = :id";
     return em.createQuery(jpql, Customer.class).setParameter("id", id).getSingleResult();
   }
 }
