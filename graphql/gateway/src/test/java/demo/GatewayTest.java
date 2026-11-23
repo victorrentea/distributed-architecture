@@ -36,13 +36,15 @@ class GatewayTest {
 
   @Test
   void nameOnly_callsOnlyCustomers() {
-    graphql.document("""
+    GraphQlTester.Response response = graphql.document("""
         {
           customer(id: 1) {
             name
           }
         }
-        """).execute().path("customer.name").entity(String.class).isEqualTo("Ana");
+        """).execute();
+
+    response.path("customer.name").entity(String.class).isEqualTo("Ana");
 
     customers.verify(1, anyRequestedFor(anyUrl()));
     orders.verify(0, anyRequestedFor(anyUrl()));
@@ -50,7 +52,7 @@ class GatewayTest {
 
   @Test
   void ordersOnly_callsOnlyOrders() {
-    graphql.document("""
+    GraphQlTester.Response response = graphql.document("""
         {
           customer(id: 1) {
             orders {
@@ -58,7 +60,9 @@ class GatewayTest {
             }
           }
         }
-        """).execute().path("customer.orders[0].total").entity(Double.class).isEqualTo(9.5);
+        """).execute();
+
+    response.path("customer.orders[0].total").entity(Double.class).isEqualTo(9.5);
 
     customers.verify(0, anyRequestedFor(anyUrl()));
     orders.verify(1, anyRequestedFor(anyUrl()));
@@ -67,7 +71,7 @@ class GatewayTest {
   @Test
   void everything_callsEachServiceOnce_inParallel() {
     long t0 = System.currentTimeMillis();
-    graphql.document("""
+    GraphQlTester.Response response = graphql.document("""
         {
           customer(id: 1) {
             id
@@ -78,7 +82,9 @@ class GatewayTest {
             }
           }
         }
-        """).execute().errors().verify();
+        """).execute();
+
+    response.errors().verify();
 
     assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // ~1s, not 2s
     customers.verify(1, anyRequestedFor(anyUrl())); // name + email: one call
