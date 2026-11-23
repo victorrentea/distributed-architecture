@@ -52,8 +52,8 @@ public class GatewayApp {
     }
 
     String fields = AstPrinter.printAstCompact(new SelectionSet(forwardedFields)); // "{name addresses{city}}"
-    String query = "{customer(id: %d) %s}".formatted(id, fields);
-    CompletableFuture<Map<String, Object>> call = supplyAsync(() -> callCustomers(query)); // started, not awaited
+    String graphqlRequestToCustomersService = "{customer(id: %d) %s}".formatted(id, fields);
+    CompletableFuture<Map<String, Object>> call = supplyAsync(() -> callCustomers(graphqlRequestToCustomersService)); // started, not awaited
     return new Customer(id, call);
   }
 
