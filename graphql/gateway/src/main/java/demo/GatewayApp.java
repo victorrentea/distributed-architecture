@@ -42,11 +42,9 @@ public class GatewayApp {
 
   @QueryMapping
   Customer customer(@Argument long id, DataFetchingEnvironment env) {
-    Set<String> ignoredFields = Set.of(
-        "id", // we already know it
-        "orders"); // comes from the orders service
+    Set<String> customersServiceFields = Set.of("name", "email", "addresses");
     List<Selection> forwardedFields = env.getField().getSelectionSet().getSelections().stream()
-        .filter(selection -> !ignoredFields.contains(((Field) selection).getName()))
+        .filter(selection -> customersServiceFields.contains(((Field) selection).getName()))
         .toList();
 
     if (forwardedFields.isEmpty()) {
