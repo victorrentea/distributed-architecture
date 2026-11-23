@@ -1,6 +1,7 @@
 package demo;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -17,7 +18,8 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest
 @AutoConfigureGraphQlTester
 class GatewayTest {
-  @RegisterExtension static WireMockExtension customers = WireMockExtension.newInstance().build();
+  @RegisterExtension static WireMockExtension customers = WireMockExtension.newInstance() // h2c off: JDK client POST + h2c upgrade = EOF
+      .options(wireMockConfig().dynamicPort().http2PlainDisabled(true)).build();
   @RegisterExtension static WireMockExtension orders = WireMockExtension.newInstance().build();
 
   @DynamicPropertySource
@@ -30,7 +32,9 @@ class GatewayTest {
 
   @BeforeEach
   void stubs() { // each service answers in 1s
-    customers.stubFor(get(anyUrl()).willReturn(okJson("{\"name\":\"Ana\",\"email\":\"ana@shop.ro\"}").withFixedDelay(1000)));
+    customers.stubFor(post("/graphql").willReturn(okJson("""
+        {"data": {"customer": {"name": "Ana", "email": "ana@shop.ro", "addresses": [{"city": "Cluj"}]}}}
+        """).withFixedDelay(1000)));
     orders.stubFor(get(anyUrl()).willReturn(okJson("[{\"id\":7,\"total\":9.5}]").withFixedDelay(1000)));
   }
 
@@ -77,6 +81,9 @@ class GatewayTest {
             id
             name
             email
+            addresses {
+              city
+            }
             orders {
               total
             }
@@ -87,7 +94,8 @@ class GatewayTest {
     response.errors().verify();
 
     assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // ~1s, not 2s
-    customers.verify(1, anyRequestedFor(anyUrl())); // name + email: one call
+    customers.verify(1, postRequestedFor(urlEqualTo("/graphql")) // name + email + addresses: one call, without orders
+        .withRequestBody(containing("name email addresses { city }")));
     orders.verify(1, anyRequestedFor(anyUrl()));
   }
 }

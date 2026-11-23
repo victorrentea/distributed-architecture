@@ -1,0 +1,23 @@
+meta {
+  name: customers direct - join only if addresses
+  type: graphql
+  seq: 4
+}
+
+post {
+  url: http://localhost:8081/graphql
+  body: graphql
+  auth: none
+}
+
+body:graphql {
+  {
+    customer(id: 1) {
+      name
+      email
+      addresses {
+        city
+      }
+    }
+  }
+}

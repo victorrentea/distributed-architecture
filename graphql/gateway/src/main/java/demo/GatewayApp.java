@@ -1,13 +1,19 @@
 package demo;
 
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
+import graphql.schema.DataFetchingFieldSelectionSet;
+import graphql.schema.SelectedField;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.graphql.client.HttpSyncGraphQlClient;
 import org.springframework.graphql.data.method.annotation.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.client.RestClient;
@@ -19,47 +25,76 @@ public class GatewayApp {
     new SpringApplicationBuilder(GatewayApp.class).properties("spring.graphql.graphiql.enabled=true").run(args);
   }
 
-  @Value("${customers:http://localhost:8081}") String customers;
-  @Value("${orders:http://localhost:8082}") String orders;
-  RestClient http = RestClient.create();
+  final HttpSyncGraphQlClient customers;
+  final RestClient orders;
 
-  record Profile(String name, String email) {}
+  GatewayApp(@Value("${customers:http://localhost:8081}") String customersUrl,
+             @Value("${orders:http://localhost:8082}") String ordersUrl) {
+    customers = HttpSyncGraphQlClient.create(RestClient.create(customersUrl + "/graphql"));
+    orders = RestClient.create(ordersUrl);
+  }
+
+  record Customer(long id, CompletableFuture<Map<String, Object>> fromCustomersService) {}
   record Order(int id, double total) {}
 
-  class Customer {
-    final int id;
-    CompletableFuture<Profile> profile; // fetched once, only if a field needs it
-
-    Customer(int id) { this.id = id; }
-
-    synchronized CompletableFuture<Profile> profile() {
-      if (profile == null) profile = supplyAsync(() -> http.get().uri(customers + "/customers/{id}", id).retrieve().body(Profile.class));
-      return profile;
-    }
-  }
-
   @QueryMapping
-  Customer customer(@Argument int id) {
-    return new Customer(id); // no call yet
+  Customer customer(@Argument long id, DataFetchingFieldSelectionSet selection) {
+    List<SelectedField> customersServiceFields = selection.getImmediateFields().stream()
+        .filter(field -> !field.getName().equals("id")) // we already know it
+        .filter(field -> !field.getName().equals("orders")) // comes from the orders service
+        .toList();
+
+    if (customersServiceFields.isEmpty()) {
+      return new Customer(id, completedFuture(Map.of())); // no call to customers
+    }
+
+    String query = "{ customer(id: %d) { %s } }".formatted(id, toGraphql(customersServiceFields));
+    CompletableFuture<Map<String, Object>> call = supplyAsync(() -> callCustomers(query)); // started, not awaited
+    return new Customer(id, call);
+  }
+
+  Map<String, Object> callCustomers(String query) {
+    return customers.document(query).retrieveSync("customer").toEntity(Map.class);
+  }
+
+  // [name, addresses → [city]]  becomes  "name addresses { city }"
+  static String toGraphql(List<SelectedField> fields) {
+    List<String> parts = new ArrayList<>();
+    for (SelectedField field : fields) {
+      List<SelectedField> children = field.getSelectionSet().getImmediateFields();
+      if (children.isEmpty()) {
+        parts.add(field.getName());
+      } else {
+        parts.add(field.getName() + " { " + toGraphql(children) + " }");
+      }
+    }
+    return String.join(" ", parts);
   }
 
   @SchemaMapping
-  int id(Customer c) {
-    return c.id;
+  CompletableFuture<Object> name(Customer c) {
+    return c.fromCustomersService().thenApply(m -> m.get("name"));
   }
 
   @SchemaMapping
-  CompletableFuture<String> name(Customer c) {
-    return c.profile().thenApply(Profile::name);
+  CompletableFuture<Object> email(Customer c) {
+    return c.fromCustomersService().thenApply(m -> m.get("email"));
   }
 
   @SchemaMapping
-  CompletableFuture<String> email(Customer c) {
-    return c.profile().thenApply(Profile::email);
+  CompletableFuture<Object> addresses(Customer c) {
+    return c.fromCustomersService().thenApply(m -> m.get("addresses"));
   }
 
   @SchemaMapping
-  CompletableFuture<List<Order>> orders(Customer c) { // runs in parallel with profile()
-    return supplyAsync(() -> http.get().uri(orders + "/orders?customerId={id}", c.id).retrieve().body(new ParameterizedTypeReference<List<Order>>() {}));
+  CompletableFuture<List<Order>> orders(Customer c) { // runs in parallel with the customers call
+    return supplyAsync(() -> callOrders(c.id()));
+  }
+
+  List<Order> callOrders(long customerId) {
+    return orders.get()
+        .uri("/orders?customerId={id}", customerId)
+        .retrieve()
+        .body(new ParameterizedTypeReference<>() {});
   }
 }
