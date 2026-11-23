@@ -1,1 +1,1 @@
-# Distributed Monolith Architecture
+# Distributed Architecture
