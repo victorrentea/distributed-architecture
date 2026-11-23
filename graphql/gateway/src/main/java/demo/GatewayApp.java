@@ -3,9 +3,11 @@ package demo;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
-import graphql.schema.DataFetchingFieldSelectionSet;
-import graphql.schema.SelectedField;
-import java.util.ArrayList;
+import graphql.language.AstPrinter;
+import graphql.language.Field;
+import graphql.language.Selection;
+import graphql.language.SelectionSet;
+import graphql.schema.DataFetchingEnvironment;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,39 +41,26 @@ public class GatewayApp {
   record Order(int id, double total) {}
 
   @QueryMapping
-  Customer customer(@Argument long id, DataFetchingFieldSelectionSet selection) {
+  Customer customer(@Argument long id, DataFetchingEnvironment env) {
     Set<String> ignoredFields = Set.of(
         "id", // we already know it
         "orders"); // comes from the orders service
-    List<SelectedField> customersServiceFields = selection.getImmediateFields().stream()
-        .filter(field -> !ignoredFields.contains(field.getName()))
+    List<Selection> forwardedFields = env.getField().getSelectionSet().getSelections().stream()
+        .filter(selection -> !ignoredFields.contains(((Field) selection).getName()))
         .toList();
 
-    if (customersServiceFields.isEmpty()) {
+    if (forwardedFields.isEmpty()) {
       return new Customer(id, completedFuture(Map.of())); // no call to customers
     }
 
-    String query = "{ customer(id: %d) { %s } }".formatted(id, toGraphql(customersServiceFields));
+    String fields = AstPrinter.printAstCompact(new SelectionSet(forwardedFields)); // "{name addresses{city}}"
+    String query = "{customer(id: %d) %s}".formatted(id, fields);
     CompletableFuture<Map<String, Object>> call = supplyAsync(() -> callCustomers(query)); // started, not awaited
     return new Customer(id, call);
   }
 
   Map<String, Object> callCustomers(String query) {
     return customers.document(query).retrieveSync("customer").toEntity(Map.class);
-  }
-
-  // [name, addresses → [city]]  becomes  "name addresses { city }"
-  static String toGraphql(List<SelectedField> fields) {
-    List<String> parts = new ArrayList<>();
-    for (SelectedField field : fields) {
-      List<SelectedField> children = field.getSelectionSet().getImmediateFields();
-      if (children.isEmpty()) {
-        parts.add(field.getName());
-      } else {
-        parts.add(field.getName() + " { " + toGraphql(children) + " }");
-      }
-    }
-    return String.join(" ", parts);
   }
 
   @SchemaMapping

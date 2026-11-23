@@ -95,7 +95,7 @@ class GatewayTest {
 
     assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // ~1s, not 2s
     customers.verify(1, postRequestedFor(urlEqualTo("/graphql")) // name + email + addresses: one call, without orders
-        .withRequestBody(containing("name email addresses { city }")));
+        .withRequestBody(containing("{customer(id: 1) {name email addresses{city}}}")));
     orders.verify(1, anyRequestedFor(anyUrl()));
   }
 }
