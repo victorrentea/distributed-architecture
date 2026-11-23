@@ -1,0 +1,21 @@
+meta {
+  name: orders only - calls orders
+  type: graphql
+  seq: 2
+}
+
+post {
+  url: http://localhost:8080/graphql
+  body: graphql
+  auth: none
+}
+
+body:graphql {
+  {
+    customer(id: 1) {
+      orders {
+        total
+      }
+    }
+  }
+}
