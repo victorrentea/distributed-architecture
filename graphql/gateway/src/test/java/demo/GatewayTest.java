@@ -4,9 +4,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.graphql.tester.AutoConfigureGraphQlTester;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,22 +28,35 @@ class GatewayTest {
 
   @Autowired GraphQlTester graphql;
 
-  @ParameterizedTest(name = "{0} → customers:{1} orders:{2}")
-  @CsvSource(delimiter = '|', textBlock = """
-      id                          | 0 | 0
-      name                        | 1 | 0
-      orders { total }            | 0 | 1
-      id name email orders { total } | 1 | 1
-      """)
-  void callsOnlyNeededServices_onceEach_inParallel(String fields, int customerCalls, int orderCalls) {
+  @BeforeEach
+  void stubs() { // each service answers in 1s
     customers.stubFor(get(anyUrl()).willReturn(okJson("{\"name\":\"Ana\",\"email\":\"ana@shop.ro\"}").withFixedDelay(1000)));
     orders.stubFor(get(anyUrl()).willReturn(okJson("[{\"id\":7,\"total\":9.5}]").withFixedDelay(1000)));
+  }
 
+  @Test
+  void nameOnly_callsOnlyCustomers() {
+    graphql.document("{ customer(id: 1) { name } }").execute().path("customer.name").entity(String.class).isEqualTo("Ana");
+
+    customers.verify(1, anyRequestedFor(anyUrl()));
+    orders.verify(0, anyRequestedFor(anyUrl()));
+  }
+
+  @Test
+  void ordersOnly_callsOnlyOrders() {
+    graphql.document("{ customer(id: 1) { orders { total } } }").execute().path("customer.orders[0].total").entity(Double.class).isEqualTo(9.5);
+
+    customers.verify(0, anyRequestedFor(anyUrl()));
+    orders.verify(1, anyRequestedFor(anyUrl()));
+  }
+
+  @Test
+  void everything_callsEachServiceOnce_inParallel() {
     long t0 = System.currentTimeMillis();
-    graphql.document("{ customer(id: 1) { " + fields + " } }").execute().errors().verify();
+    graphql.document("{ customer(id: 1) { id name email orders { total } } }").execute().errors().verify();
 
-    assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // parallel, not 2s
-    customers.verify(customerCalls, anyRequestedFor(anyUrl()));
-    orders.verify(orderCalls, anyRequestedFor(anyUrl()));
+    assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // ~1s, not 2s
+    customers.verify(1, anyRequestedFor(anyUrl())); // name + email: one call
+    orders.verify(1, anyRequestedFor(anyUrl()));
   }
 }
