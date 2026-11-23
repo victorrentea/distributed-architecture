@@ -14,13 +14,15 @@ body:graphql {
   {
     customer(id: 1) {
       id
-      name
-      email
-      addresses {
-        city
-      }
-      invoicingAddress {
-        city
+      details {
+        name
+        email
+        addresses {
+          city
+        }
+        invoicingAddress {
+          city
+        }
       }
       orders {
         id

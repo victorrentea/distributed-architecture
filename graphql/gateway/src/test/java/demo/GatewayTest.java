@@ -43,12 +43,14 @@ class GatewayTest {
     GraphQlTester.Response response = graphql.document("""
         {
           customer(id: 1) {
-            name
+            details {
+              name
+            }
           }
         }
         """).execute();
 
-    response.path("customer.name").entity(String.class).isEqualTo("Ana");
+    response.path("customer.details.name").entity(String.class).isEqualTo("Ana");
 
     customers.verify(1, anyRequestedFor(anyUrl()));
     orders.verify(0, anyRequestedFor(anyUrl()));
@@ -79,10 +81,12 @@ class GatewayTest {
         {
           customer(id: 1) {
             id
-            name
-            email
-            addresses {
-              city
+            details {
+              name
+              email
+              addresses {
+                city
+              }
             }
             orders {
               total
@@ -94,7 +98,7 @@ class GatewayTest {
     response.errors().verify();
 
     assertThat(System.currentTimeMillis() - t0).isLessThan(1800); // ~1s, not 2s
-    customers.verify(1, postRequestedFor(urlEqualTo("/graphql")) // name + email + addresses: one call, without orders
+    customers.verify(1, postRequestedFor(urlEqualTo("/graphql")) // the whole details selection, as is: one call
         .withRequestBody(containing("{customer(id: 1) {name email addresses{city}}}")));
     orders.verify(1, anyRequestedFor(anyUrl()));
   }

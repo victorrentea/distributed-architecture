@@ -13,7 +13,9 @@ post {
 body:graphql {
   {
     customer(id: 1) {
-      name
+      details {
+        name
+      }
     }
   }
 }

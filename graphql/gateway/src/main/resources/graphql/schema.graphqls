@@ -1,11 +1,9 @@
 type Query { customer(id: ID!): Customer }
 type Customer {
   id: ID
-  name: String          # customers service
-  email: String         # customers service
-  addresses: [Address]  # customers service
-  invoicingAddress: Address  # customers service
-  orders: [Order]       # orders service
+  details: CustomerDetails  # customers service
+  orders: [Order]           # orders service
 }
+type CustomerDetails { name: String, email: String, addresses: [Address], invoicingAddress: Address }
 type Address { city: String }
 type Order { id: ID, total: Float }
