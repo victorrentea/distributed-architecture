@@ -8,6 +8,7 @@ import graphql.schema.SelectedField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -39,9 +40,11 @@ public class GatewayApp {
 
   @QueryMapping
   Customer customer(@Argument long id, DataFetchingFieldSelectionSet selection) {
+    Set<String> ignoredFields = Set.of(
+        "id", // we already know it
+        "orders"); // comes from the orders service
     List<SelectedField> customersServiceFields = selection.getImmediateFields().stream()
-        .filter(field -> !field.getName().equals("id")) // we already know it
-        .filter(field -> !field.getName().equals("orders")) // comes from the orders service
+        .filter(field -> !ignoredFields.contains(field.getName()))
         .toList();
 
     if (customersServiceFields.isEmpty()) {
