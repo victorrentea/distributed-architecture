@@ -4,6 +4,7 @@ type Customer {
   name: String          # customers service
   email: String         # customers service
   addresses: [Address]  # customers service
+  invoicingAddress: Address  # customers service
   orders: [Order]       # orders service
 }
 type Address { city: String }

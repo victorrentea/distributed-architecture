@@ -21,6 +21,7 @@ public class CustomersApp {
     public String name;
     public String email;
     @OneToMany @JoinColumn(name = "customer_id") public List<Address> addresses; // LAZY
+    @OneToOne(fetch = FetchType.LAZY) public Address invoicingAddress;
   }
 
   @Entity(name = "Address")
@@ -36,6 +37,9 @@ public class CustomersApp {
     String jpql = "select c from Customer c";
     if (graphqlFields.contains("addresses")) {
       jpql += " left join fetch c.addresses"; // ONE query, joined only if asked
+    }
+    if (graphqlFields.contains("invoicingAddress")) {
+      jpql += " left join fetch c.invoicingAddress";
     }
     jpql += " where c.id = :id";
     return em.createQuery(jpql, Customer.class).setParameter("id", id).getSingleResult();

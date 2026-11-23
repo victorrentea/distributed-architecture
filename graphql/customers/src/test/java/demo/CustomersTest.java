@@ -57,4 +57,24 @@ class CustomersTest {
     assertThat(sql.getPrepareStatementCount()).isEqualTo(1);
     assertThat(sql.getQueries()).singleElement().asString().contains("join fetch c.addresses");
   }
+
+  @Test
+  void withInvoicingAddress_oneQuery_withJoin() {
+    GraphQlTester.Response response = graphql.document("""
+        {
+          customer(id: 1) {
+            name
+            invoicingAddress {
+              city
+            }
+          }
+        }
+        """).execute();
+
+    response.path("customer.invoicingAddress.city").entity(String.class).isEqualTo("Bucuresti");
+    assertThat(sql.getPrepareStatementCount()).isEqualTo(1);
+    assertThat(sql.getQueries()).singleElement().asString()
+        .contains("join fetch c.invoicingAddress")
+        .doesNotContain("c.addresses");
+  }
 }

@@ -42,7 +42,7 @@ public class GatewayApp {
 
   @QueryMapping
   Customer customer(@Argument long id, DataFetchingEnvironment env) {
-    Set<String> customersServiceFields = Set.of("name", "email", "addresses");
+    Set<String> customersServiceFields = Set.of("name", "email", "addresses", "invoicingAddress");
     List<Selection> forwardedFields = env.getField().getSelectionSet().getSelections().stream()
         .filter(selection -> customersServiceFields.contains(((Field) selection).getName()))
         .toList();
@@ -74,6 +74,11 @@ public class GatewayApp {
   @SchemaMapping
   CompletableFuture<Object> addresses(Customer c) {
     return c.fromCustomersService().thenApply(m -> m.get("addresses"));
+  }
+
+  @SchemaMapping
+  CompletableFuture<Object> invoicingAddress(Customer c) {
+    return c.fromCustomersService().thenApply(m -> m.get("invoicingAddress"));
   }
 
   @SchemaMapping
