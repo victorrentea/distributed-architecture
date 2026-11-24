@@ -55,7 +55,7 @@ public class ClientApp {
   @Retry(name = "flaky")
   @GetMapping("/retry")
   String retry() {
-    System.out.println("calling /flaky ...");
+    System.out.println(java.time.LocalTime.now() + " calling /flaky ...");
     return "client got: " + server.get()
         .uri("/flaky")
         .retrieve()
