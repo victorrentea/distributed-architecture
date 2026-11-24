@@ -14,3 +14,4 @@ Break the server at runtime: `curl -X POST ':8096/chaos?delayMillis=3000&failRat
 - timeouts: 10s by default for every call (`spring.http.client.read-timeout`), 40s for `GET :8095/slow` → `:8096/hang` (sleeps 1h)
 Bruno collection in `resilience/bruno/`
 - retry: `GET :8096/flaky` answers 400 / 503 / 200, a third each; `GET :8095/retry` calls it with Resilience4j `@Retry`: 3 attempts, exponential backoff + jitter, retrying the 503 but not the 400
+- `resilience/simulation.html`: an animated walk through all of the above, one scenario per step (keys 1-6, Space pauses)

@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resilience patterns - simulation</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #10161d; --muted: #5b6876; --box: #eef2f7; --line: #9aa8b8;
+    --ok: #12833f; --err: #cf1f2e; --warn: #b85c00; --req: #0b63ce; --pk-fg: #ffffff;
+    --tab: #e3e9f1; --code-bg: #f3f5f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1319; --fg: #f3f6f9; --muted: #a3b1c0; --box: #19222c; --line: #55667a;
+      --ok: #3ddc84; --err: #ff6b6b; --warn: #ffb020; --req: #5cb8ff; --pk-fg: #0b0f14;
+      --tab: #222d3a; --code-bg: #161d26;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1319; --fg: #f3f6f9; --muted: #a3b1c0; --box: #19222c; --line: #55667a;
+    --ok: #3ddc84; --err: #ff6b6b; --warn: #ffb020; --req: #5cb8ff; --pk-fg: #0b0f14;
+    --tab: #222d3a; --code-bg: #161d26;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; padding: 10px 16px 12px; gap: 8px;
+  }
+  .mono, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  header { display: flex; align-items: center; gap: 8px; flex: none; }
+  button {
+    font: inherit; font-size: 18px; font-weight: 600; color: var(--fg); background: var(--tab);
+    border: 2px solid transparent; border-radius: 10px; padding: 7px 12px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: var(--line); }
+  button.on { background: var(--req); color: var(--pk-fg); }
+  button:focus-visible { outline: 3px solid var(--warn); outline-offset: 2px; }
+  .spacer { flex: 1; }
+  #route { display: flex; align-items: center; gap: 14px; flex: none; font-size: 22px; min-height: 36px; }
+  #route .path { font-weight: 700; white-space: pre; }
+  .badge { font-size: 18px; font-weight: 700; border-radius: 8px; padding: 3px 10px; white-space: nowrap; }
+  .badge.before { background: var(--warn); color: var(--pk-fg); }
+  .badge.scale { border: 2px solid var(--line); color: var(--muted); }
+  #stage { flex: 1 1 auto; min-height: 0; width: 100%; display: block; }
+  footer { flex: none; display: flex; flex-direction: column; gap: 6px; }
+  #caption { font-size: 25px; font-weight: 700; line-height: 1.2; }
+  #config {
+    background: var(--code-bg); border-left: 6px solid var(--req); border-radius: 8px;
+    padding: 7px 14px; font-size: 18px; line-height: 1.4; white-space: pre; overflow: hidden; height: 118px;
+  }
+  #config .c { color: var(--muted); }
+  #config b { color: var(--req); }
+
+  /* SVG */
+  svg text { fill: var(--fg); font-variant-numeric: tabular-nums; }
+  .box { fill: var(--box); stroke: var(--line); stroke-width: 2; }
+  .box-title { font-size: 26px; font-weight: 800; }
+  .box-note { font-size: 19px; fill: var(--muted); }
+  .link { stroke: var(--line); stroke-width: 2; stroke-dasharray: 3 7; }
+  .link.open { stroke: var(--req); stroke-width: 4; stroke-dasharray: none; }
+  .k-wait { --c: var(--req); } .k-ok { --c: var(--ok); } .k-err { --c: var(--err); }
+  .k-warn { --c: var(--warn); } .k-waste { --c: var(--muted); } .k-pause { --c: var(--muted); }
+  .cell rect.bg { fill: color-mix(in srgb, var(--c) 24%, var(--box)); stroke: var(--c); stroke-width: 3; }
+  .cell.k-waste rect.bg { stroke-dasharray: 8 6; }
+  .cell.k-idle rect.bg { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 8; opacity: .6; }
+  .cell.k-idle text, .cell.k-idle .bar { display: none; }
+  .cell text.main { font-weight: 700; }
+  .cell text.sub { fill: var(--fg); opacity: .85; }
+  .cell .track { fill: var(--c); opacity: .25; }
+  .cell .fill { fill: var(--c); }
+  .pk rect { fill: var(--c); }
+  .pk text { fill: var(--pk-fg); font-size: 19px; font-weight: 700; }
+  .pk.k-req { --c: var(--req); }
+  .strip-title { font-size: 20px; font-weight: 700; }
+  .axis { stroke: var(--line); stroke-width: 2; }
+  .axis-label { font-size: 18px; fill: var(--muted); }
+  .hit { fill: var(--err); }
+  .hit.first { fill: var(--muted); }
+  .cell.k-pause .fill { fill: var(--fg); }
+  .playhead { stroke: var(--fg); stroke-width: 2; opacity: .6; }
+  .peak { font-size: 22px; font-weight: 800; fill: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <span id="tabs" style="display:contents"></span>
+  <span class="spacer"></span>
+  <button id="play" title="Play / pause the animation (Space)">Pause</button>
+  <span id="speeds" style="display:contents"></span>
+</header>
+<div id="route"></div>
+<svg id="stage" viewBox="0 0 1440 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Animated simulation of requests between caller, client and server"></svg>
+<footer>
+  <div id="caption"></div>
+  <div id="config" class="mono"></div>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('stage');
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmtS = s => s < 60 ? s.toFixed(1) + 's' : Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const INF = 1e9;
+const COL = { caller: { x: 20, w: 310 }, client: { x: 520, w: 400 }, server: { x: 1110, w: 310 } };
+const SEG = [[330, 520], [920, 1110]]; // gaps: caller-client, client-server
+function mulberry(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const newLane = () => ({ caller: [], client: [], server: [], hops: [], links: [] });
+
+/* ---------- scenarios 1-3: timeouts (times in screen seconds at 1x) ---------- */
+const HOP = 0.6;
+
+function noTimeout() {
+  const l = newLane(), t0 = 2 * HOP;
+  const T = u => { const v = u - t0; return v <= 0 ? 0 : v < 4 ? 4 * v : 16 * Math.exp((v - 4) * 0.6); };
+  const ff = u => u - t0 > 4;
+  l.hops.push({ a: 0, b: HOP, seg: 0, dir: 1, kind: 'req', text: '/slow' },
+              { a: HOP, b: t0, seg: 1, dir: 1, kind: 'req', text: '/hang' });
+  l.links.push({ a: HOP, b: INF, seg: 0 }, { a: t0, b: INF, seg: 1 });
+  l.caller.push({ a: 0, b: INF, kind: 'wait', text: u => 'GET /slow  ⏱ ' + fmtS(T(u)), sub: u => ff(u) ? '⏩ still waiting…' : 'waiting…' });
+  l.client.push({ a: HOP, b: INF, kind: 'wait', text: u => 'thread blocked  ' + fmtS(T(u)), sub: 'no timeout → waits as long as it takes' });
+  l.server.push({ a: t0, b: INF, kind: 'wait', text: u => 'sleep ' + fmtS(T(u)) + ' / 1h', sub: 'Thread.sleep(3_600_000)', bar: { len: 1, f: u => T(u) / 3600 } });
+  return { lanes: [l], dur: 11.5 };
+}
+
+// one lane: caller -> client (RestClient with a read timeout) -> server that needs `work` seconds
+function timeoutLane(o) {
+  const l = newLane(), R = o.rate, t0 = 2 * HOP, tTO = t0 + o.timeout / R, tDone = t0 + o.work / R;
+  const sec = (u, max) => clamp((u - t0) * R, 0, max);
+  l.hops.push({ a: 0, b: HOP, seg: 0, dir: 1, kind: 'req', text: o.path },
+              { a: HOP, b: t0, seg: 1, dir: 1, kind: 'req', text: o.target });
+  l.links.push({ a: HOP, b: tTO + HOP, seg: 0 }, { a: t0, b: tTO, seg: 1 });
+  l.caller.push({ a: 0, b: tTO + HOP, kind: 'wait', text: u => 'GET ' + o.path + '  ⏱ ' + fmtS(sec(u, o.timeout)), sub: 'waiting…' },
+                { a: tTO + HOP, b: INF, kind: 'err', text: '500  after ' + o.timeout + '.0s', sub: 'Internal Server Error' });
+  const cbar = { len: o.timeout / o.barMax, f: u => sec(u, o.timeout) / o.timeout };
+  l.client.push({ a: HOP, b: tTO, kind: 'wait', text: u => 'blocked ' + fmtS(sec(u, o.timeout)) + ' / ' + o.timeout + 's', sub: o.clientSub, bar: cbar },
+                { a: tTO, b: INF, kind: 'warn', text: '⏱ read timeout at ' + o.timeout + 's', sub: o.clientSub, bar: cbar });
+  const hour = o.work >= 3600;
+  const sbar = hour ? null : { len: Math.min(1, o.work / o.barMax), f: u => sec(u, o.work) / o.work };
+  const of = hour ? ' / 1h' : ' / ' + o.work + 's';
+  l.server.push({ a: t0, b: tTO, kind: 'wait', text: u => 'sleep ' + fmtS(sec(u, o.work)) + of, sub: o.serverSub, bar: sbar },
+                { a: tTO, b: tDone, kind: 'waste', text: u => 'sleep ' + fmtS(sec(u, o.work)) + of, sub: 'nobody is waiting any more', bar: sbar });
+  if (!hour) {
+    l.server.push({ a: tDone, b: INF, kind: 'waste', text: 'done at ' + o.work + 's', sub: (o.work - o.timeout) + 's of wasted work', bar: sbar });
+    l.hops.push({ a: tDone, b: tDone + 0.9, seg: 1, dir: -1, kind: 'ok', text: '200 ✕', lost: true });
+  }
+  l.hops.push({ a: tTO, b: tTO + HOP, seg: 0, dir: -1, kind: 'err', text: '500' });
+  return l;
+}
+
+/* ---------- scenarios 4-6: retries (times in REAL milliseconds, K screen seconds per real second) ---------- */
+const K = 4, HOP_MS = 90, WAIT_SCALE = 1500;
+function retryLane(o) {
+  const l = newLane(), U = ms => ms * K / 1000, hits = [];
+  let t = o.start;
+  l.hops.push({ a: U(t), b: U(t + HOP_MS), seg: 0, dir: 1, kind: 'req', text: '/retry' });
+  l.links.push({ a: U(t + HOP_MS), b: INF, seg: 0 });
+  t += HOP_MS;
+  let final, endMs;
+  for (let n = 1; n <= 3; n++) {
+    const sent = t, arrive = t + HOP_MS, back = arrive + HOP_MS, code = o.outcome(n);
+    l.hops.push({ a: U(sent), b: U(arrive), seg: 1, dir: 1, kind: 'req', text: '/flaky' });
+    l.links.push({ a: U(sent), b: U(back), seg: 1 });
+    hits.push({ ms: arrive, n });
+    const kind = code === 200 ? 'ok' : code === 400 ? 'warn' : 'err';
+    l.server.push({ a: U(arrive), b: U(back + 60), kind, text: String(code) });
+    l.hops.push({ a: U(arrive), b: U(back), seg: 1, dir: -1, kind, text: String(code) });
+    l.client.push({ a: U(sent), b: U(back), kind: 'wait', text: `try ${n}/3 · calling…` });
+    t = back;
+    if (code === 200) { l.client.push({ a: U(t), b: INF, kind: 'ok', text: `try ${n}/3: 200 ✓` }); final = 200; break; }
+    if (code === 400) { l.client.push({ a: U(t), b: INF, kind: 'warn', text: `try ${n}/3: 400 → NO retry` }); final = 500; break; }
+    if (n === 3) { l.client.push({ a: U(t), b: INF, kind: 'err', text: 'try 3/3: 503 → give up' }); final = 500; break; }
+    const w = Math.round(o.wait(n)), f0 = U(t), f1 = U(t + w);
+    l.client.push({ a: f0, b: f1, kind: 'pause', text: `try ${n}/3: 503 → wait ${w} ms`, bar: { len: w / WAIT_SCALE, f: u => (u - f0) / (f1 - f0) } });
+    t += w;
+  }
+  endMs = t + HOP_MS;
+  const kind = final === 200 ? 'ok' : 'err', total = endMs - o.start;
+  l.hops.push({ a: U(t), b: U(endMs), seg: 0, dir: -1, kind, text: String(final) });
+  l.links[0].b = U(endMs);
+  l.caller.push({ a: U(o.start), b: U(endMs), kind: 'wait', text: u => 'GET /retry  ⏱ ' + Math.round(clamp(u * 1000 / K - o.start, 0, total)) + ' ms' },
+                { a: U(endMs), b: INF, kind, text: (final === 200 ? '200  in ' : '500  after ') + total + ' ms' });
+  return { lane: l, hits, endMs };
+}
+function retryModel(n, mk) {
+  const lanes = [], hits = []; let end = 0;
+  for (let i = 0; i < n; i++) { const r = retryLane(mk(i)); lanes.push(r.lane); r.hits.forEach(h => hits.push(h)); end = Math.max(end, r.endMs); }
+  return { lanes, hits, dur: end * K / 1000 + 2.5 };
+}
+const backoffWait = rnd => n => 500 * Math.pow(2, n - 1) * (0.5 + rnd()); // 500ms, 1s; each x [0.5 .. 1.5]
+
+const PFX = '<span class="c">resilience4j.retry.instances.flaky</span>';
+const SCENARIOS = [
+  {
+    tab: '1 No timeout', before: true,
+    route: 'GET :8095/slow → GET :8096/hang', scale: '⏩ 4× fast, then fast-forward',
+    notes: ['Bruno', 'RestClient.create()', '/hang sleeps 1 hour'],
+    caption: 'No timeout: one stuck call blocks a client thread, and the caller, for as long as the server likes.',
+    config: '<span class="c">// BEFORE, in ClientApp: a RestClient with the defaults = no read timeout at all</span>\n' +
+            'RestClient server = <b>RestClient.create()</b>;\n' +
+            '<span class="c">// ServerApp, GET /hang:</span>\n' +
+            'Thread.sleep(<b>3_600_000</b>); <span class="c">// 1 hour</span>',
+    build: noTimeout,
+  },
+  {
+    tab: '2 Timeout 10s',
+    route: 'GET :8095/call → GET :8096/data', scale: '4× fast: 10 s real ≈ 2.5 s here',
+    notes: ['Bruno', 'RestClient "server"', 'chaos: delayMillis=15000'],
+    caption: 'Default timeout: the client gives up at 10s → 500. The server works 5 more seconds for nobody.',
+    config: '<span class="c"># application.properties: every RestClient built from Spring Boot\'s RestClient.Builder</span>\n' +
+            'spring.http.client.connect-timeout=1s\n' +
+            'spring.http.client.<b>read-timeout=10s</b>\n' +
+            '<span class="c"># the slow server:</span> POST :8096/chaos?<b>delayMillis=15000</b>',
+    build: () => ({ dur: 8, lanes: [timeoutLane({ path: '/call', target: '/data', timeout: 10, work: 15, rate: 4, barMax: 15,
+      clientSub: 'RestClient "server": read-timeout=10s', serverSub: 'Thread.sleep(delayMillis)' })] }),
+  },
+  {
+    tab: '3 Timeout 40s per call',
+    route: 'GET :8095/call → /data     vs     GET :8095/slow → /hang', scale: '5× fast: 10 s real ≈ 2 s here',
+    notes: ['Bruno', '2 RestClients, 2 timeouts', '/data: 15s | /hang: 1h'],
+    caption: 'A call you KNOW is slow gets its own RestClient with a larger timeout (40s); the default stays 10s.',
+    config: '<span class="c"># application.properties → RestClient "server" (the default for every call)</span>\n' +
+            'spring.http.client.<b>read-timeout=10s</b>\n' +
+            '<span class="c">// ClientApp → RestClient "patientServer" (only for GET /slow)</span>\n' +
+            'ClientHttpRequestFactorySettings.defaults().withConnectTimeout(Duration.ofSeconds(1)).<b>withReadTimeout(Duration.ofSeconds(40))</b>',
+    build: () => ({ dur: 12.5, lanes: [
+      timeoutLane({ path: '/call', target: '/data', timeout: 10, work: 15, rate: 5, barMax: 40,
+        clientSub: '"server": read-timeout=10s', serverSub: '/data: sleep(delayMillis)' }),
+      timeoutLane({ path: '/slow', target: '/hang', timeout: 40, work: 3600, rate: 5, barMax: 40,
+        clientSub: '"patientServer": withReadTimeout(40s)', serverSub: '/hang: sleep(1 hour)' }),
+    ] }),
+  },
+  {
+    tab: '4 Retry: fixed wait', before: true, strip: true,
+    route: '6 × GET :8095/retry → GET :8096/flaky', scale: 'slow motion: 1 s real = 4 s here',
+    notes: ['Bruno × 6', '@Retry(name = "flaky")', 'overloaded: always 503'],
+    caption: 'Fixed wait: clients that failed together retry together. Synchronized waves hit a server that is already down.',
+    config: '<span class="c"># BEFORE: the same wait for everybody, no backoff, no jitter</span>\n' +
+            PFX + '.<b>max-attempts=3</b>\n' +
+            PFX + '.<b>wait-duration=500ms</b>',
+    build: () => retryModel(6, () => ({ start: 0, outcome: () => 503, wait: () => 500 })),
+  },
+  {
+    tab: '5 Backoff + jitter', strip: true,
+    route: '6 × GET :8095/retry → GET :8096/flaky', scale: 'slow motion: 1 s real = 4 s here',
+    notes: ['Bruno × 6', '@Retry(name = "flaky")', 'overloaded: always 503'],
+    caption: 'Exponential backoff gives the server air (500ms, then 1s); jitter (±50%) spreads the clients apart.',
+    config: PFX + '.<b>max-attempts=3</b>\n' +
+            PFX + '.<b>wait-duration=500ms</b>\n' +
+            PFX + '.<b>enable-exponential-backoff=true</b>     ' + '<span class="c">.</span><b>exponential-backoff-multiplier=2</b>\n' +
+            PFX + '.<b>enable-randomized-wait=true</b>         ' + '<span class="c">.</span><b>randomized-wait-factor=0.5</b>',
+    build: first => { const rnd = first ? mulberry(7) : Math.random; const w = backoffWait(rnd);
+      return retryModel(6, () => ({ start: 0, outcome: () => 503, wait: w })); },
+  },
+  {
+    tab: '6 Retry filter',
+    route: 'GET :8095/retry → GET :8096/flaky', scale: 'slow motion: 1 s real = 4 s here',
+    notes: ['Bruno', '@Retry(name = "flaky")', '400 | 503 | 200, 1/3 each'],
+    caption: 'Retry only what another attempt can fix: 503 yes (max 3 attempts); 400 never: same request, same answer.',
+    config: PFX + '.<b>max-attempts=3</b>\n' +
+            PFX + '.<b>retry-exceptions</b>=…HttpServerErrorException,…ResourceAccessException  <span class="c"># 5xx, timeout</span>\n' +
+            PFX + '.<b>ignore-exceptions</b>=…HttpClientErrorException  <span class="c"># 4xx: fail at once</span>\n' +
+            '<span class="c"># the caller gets a 500 in both failures: the client does not handle the exception</span>',
+    build: first => {
+      const curated = [[200], [400], [503, 200], [503, 400], [503, 503, 503], [503, 503, 200]];
+      const rnd = first ? mulberry(11) : Math.random, w = backoffWait(rnd);
+      const dice = () => { const d = Math.random(); return d < 1 / 3 ? 400 : d < 2 / 3 ? 503 : 200; };
+      return retryModel(6, i => ({ start: i * 150, outcome: n => first ? curated[i][n - 1] : dice(), wait: w }));
+    },
+  },
+];
+
+/* ---------- rendering ---------- */
+let view = null; // DOM handles of the current scenario
+function setText(node, s, maxW) {
+  if (node._s === s) return;
+  node._s = s; node.textContent = s;
+  node.removeAttribute('textLength'); node.removeAttribute('lengthAdjust');
+  if (maxW && node.getComputedTextLength() > maxW) { node.setAttribute('textLength', maxW); node.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+}
+function buildView(sc, model) {
+  svg.textContent = '';
+  const boxH = sc.strip ? 400 : 550, top = 84, bottom = boxH - 4, n = model.lanes.length;
+  const names = ['caller (Bruno)', 'client :8095', 'server :8096'];
+  ['caller', 'client', 'server'].forEach((c, i) => {
+    const { x, w } = COL[c];
+    el('rect', { class: 'box', x, y: 4, width: w, height: boxH, rx: 16 }, svg);
+    el('text', { class: 'box-title', x: x + w / 2, y: 38, 'text-anchor': 'middle' }, svg).textContent = names[i];
+    const note = el('text', { class: 'box-note mono', x: x + w / 2, y: 66, 'text-anchor': 'middle' }, svg);
+    setText(note, i === 0 ? '' : sc.notes[i], w - 16);
+  });
+  const laneH = Math.min((bottom - top) / n, 150), off = top + ((bottom - top) - laneH * n) / 2;
+  const cellH = Math.min(laneH - 10, 124), big = cellH >= 96;
+  const fs = big ? 27 : cellH >= 60 ? 22 : 20;
+  const gLinks = el('g', {}, svg), gCells = el('g', {}, svg), gPk = el('g', {}, svg);
+  const lanes = model.lanes.map((lane, i) => {
+    const yc = off + laneH * (i + 0.5);
+    const links = SEG.map(s => el('line', { class: 'link', x1: s[0], x2: s[1], y1: yc, y2: yc }, gLinks));
+    const cells = {};
+    for (const c of ['caller', 'client', 'server']) {
+      const { x, w } = COL[c], cx = x + 10, cw = w - 20;
+      const g = el('g', { class: 'cell k-idle' }, gCells);
+      el('rect', { class: 'bg', x: cx, y: yc - cellH / 2, width: cw, height: cellH, rx: 10 }, g);
+      const bar = el('g', { class: 'bar' }, g);
+      const by = yc + cellH / 2 - (big ? 16 : 9), bh = big ? 8 : 5;
+      const track = el('rect', { class: 'track', x: cx + 10, y: by, width: 0, height: bh, rx: 2 }, bar);
+      const fill = el('rect', { class: 'fill', x: cx + 10, y: by, width: 0, height: bh, rx: 2 }, bar);
+      const main = el('text', { class: 'main', x: x + w / 2, y: big ? yc - 12 : yc + fs * 0.34 - 2, 'text-anchor': 'middle', 'font-size': fs }, g);
+      const sub = big ? el('text', { class: 'sub', x: x + w / 2, y: yc + 20, 'text-anchor': 'middle', 'font-size': 19 }, g) : null;
+      cells[c] = { g, track, fill, main, sub, cw, states: lane[c], kind: 'idle' };
+    }
+    const hops = lane.hops.map(h => {
+      const g = el('g', { class: 'pk k-' + h.kind, visibility: 'hidden' }, gPk);
+      const w = h.text.length * 11.6 + 22;
+      el('rect', { x: -w / 2, y: -17, width: w, height: 34, rx: 17 }, g);
+      el('text', { class: 'mono', x: 0, y: 7, 'text-anchor': 'middle' }, g).textContent = h.text;
+      const [xa, xb] = SEG[h.seg];
+      return { h, g, y: yc, x0: (h.dir > 0 ? xa : xb) + h.dir * (w / 2 - 14), x1: (h.dir > 0 ? xb : xa) - h.dir * (w / 2 - 14) };
+    });
+    return { links, cells, hops, lane };
+  });
+  let strip = null;
+  if (sc.strip) {
+    const X0 = 190, X1 = 1410, TMAX = 3000, base = 528, x = ms => X0 + ms / TMAX * (X1 - X0);
+    const t1 = el('text', { class: 'strip-title', x: 20, y: 470 }, svg); t1.textContent = 'requests hitting';
+    const t2 = el('text', { class: 'strip-title', x: 20, y: 496 }, svg); t2.textContent = 'the server';
+    el('line', { class: 'axis', x1: X0 - 10, x2: X1, y1: base, y2: base }, svg);
+    for (let ms = 0; ms <= TMAX; ms += 500) {
+      el('line', { class: 'axis', x1: x(ms), x2: x(ms), y1: base, y2: base + 6 }, svg);
+      el('text', { class: 'axis-label', x: x(ms), y: base + 26, 'text-anchor': 'middle' }, svg).textContent = (ms / 1000).toFixed(1) + 's';
+    }
+    const BIN = 50, count = {};
+    const hits = model.hits.slice().sort((a, b) => a.ms - b.ms).map(({ ms, n }) => {
+      const b = Math.floor(ms / BIN), k = count[b] = (count[b] || 0) + 1;
+      const r = el('rect', { class: n === 1 ? 'hit first' : 'hit', x: x(b * BIN) + 1, y: base - k * 13, width: 18, height: 11, rx: 3, visibility: 'hidden' }, svg);
+      return { ms, r, k, retry: n > 1 };
+    });
+    const playhead = el('line', { class: 'playhead', y1: 452, y2: base, x1: X0, x2: X0 }, svg);
+    const peak = el('text', { class: 'peak', x: X1, y: 440, 'text-anchor': 'end' }, svg);
+    el('text', { class: 'axis-label', x: X0 - 10, y: 440 }, svg).textContent = 'grey = first attempt, red = retry';
+    strip = { hits, playhead, peak, x, TMAX };
+  }
+  view = { lanes, strip };
+}
+function render(u) {
+  for (const L of view.lanes) {
+    for (const c in L.cells) {
+      const C = L.cells[c];
+      let st = null;
+      for (const s of C.states) if (u >= s.a && u < s.b) st = s;
+      const kind = st ? st.kind : 'idle';
+      if (kind !== C.kind) { C.g.setAttribute('class', 'cell k-' + kind); C.kind = kind; }
+      if (!st) continue;
+      setText(C.main, typeof st.text === 'function' ? st.text(u) : st.text, C.cw - 16);
+      if (C.sub) setText(C.sub, st.sub ? (typeof st.sub === 'function' ? st.sub(u) : st.sub) : '', C.cw - 16);
+      const len = st.bar ? st.bar.len * (C.cw - 20) : 0;
+      C.track.setAttribute('width', len);
+      C.fill.setAttribute('width', st.bar ? len * clamp(st.bar.f(u), 0, 1) : 0);
+    }
+    L.lane.links.forEach(k => { k._on = false; });
+    L.links.forEach((line, seg) => {
+      const open = L.lane.links.some(k => k.seg === seg && u >= k.a && u < k.b);
+      line.setAttribute('class', open ? 'link open' : 'link');
+    });
+    for (const H of L.hops) {
+      const { h } = H;
+      if (u < h.a || u >= h.b) { H.g.setAttribute('visibility', 'hidden'); continue; }
+      let p = (u - h.a) / (h.b - h.a), op = 1;
+      if (h.lost) { op = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4; p *= 0.55; }
+      H.g.setAttribute('visibility', 'visible');
+      H.g.setAttribute('opacity', op);
+      H.g.setAttribute('transform', `translate(${H.x0 + (H.x1 - H.x0) * p},${H.y})`);
+    }
+  }
+  const S = view.strip;
+  if (S) {
+    const now = u * 1000 / K, bins = {};
+    let peak = 0;
+    for (const hit of S.hits) {
+      const on = hit.ms <= now;
+      hit.r.setAttribute('visibility', on ? 'visible' : 'hidden');
+      if (on && hit.retry) peak = Math.max(peak, hit.k);
+    }
+    const px = S.x(Math.min(now, S.TMAX));
+    S.playhead.setAttribute('x1', px); S.playhead.setAttribute('x2', px);
+    setText(S.peak, peak ? 'retries: at most ' + peak + ' at the same instant' : '');
+  }
+}
+
+/* ---------- engine + controls ---------- */
+const qs = new URLSearchParams(location.search);
+const theme = qs.get('theme');
+if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
+const state = { idx: 0, u: 0, playing: true, speed: 1, model: null, first: true };
+const tabsEl = document.getElementById('tabs'), speedsEl = document.getElementById('speeds'), playBtn = document.getElementById('play');
+const tabBtns = SCENARIOS.map((sc, i) => {
+  const b = document.createElement('button');
+  b.textContent = sc.tab; b.title = 'Show scenario ' + (i + 1) + ' (key ' + (i + 1) + ')';
+  b.onclick = () => pick(i); tabsEl.appendChild(b); return b;
+});
+const speedBtns = [0.5, 1, 2].map(s => {
+  const b = document.createElement('button');
+  b.textContent = s + '×'; b.title = 'Play the animation at ' + s + '× speed';
+  b.onclick = () => setSpeed(s); speedsEl.appendChild(b); b._s = s; return b;
+});
+function setSpeed(s) { state.speed = s; speedBtns.forEach(b => b.classList.toggle('on', b._s === s)); }
+function setPlaying(p) { state.playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
+function rebuild() {
+  const sc = SCENARIOS[state.idx];
+  state.model = sc.build(state.first);
+  buildView(sc, state.model);
+}
+function pick(i, keepHash) {
+  state.idx = i; state.u = 0; state.first = !qs.has('random'); // ?random: skip the curated first loop
+  const sc = SCENARIOS[i];
+  tabBtns.forEach((b, j) => b.classList.toggle('on', j === i));
+  document.getElementById('route').innerHTML =
+    (sc.before ? '<span class="badge before">BEFORE</span>' : '') +
+    '<span class="path mono"></span><span class="spacer"></span><span class="badge scale"></span>';
+  document.querySelector('#route .path').textContent = sc.route;
+  document.querySelector('#route .scale').textContent = sc.scale;
+  document.getElementById('caption').textContent = sc.caption;
+  document.getElementById('config').innerHTML = sc.config;
+  if (!keepHash) history.replaceState(null, '', '#' + (i + 1));
+  rebuild(); render(0);
+}
+playBtn.onclick = () => setPlaying(!state.playing);
+addEventListener('keydown', e => {
+  if (e.key >= '1' && e.key <= '6') pick(+e.key - 1);
+  else if (e.key === ' ') { e.preventDefault(); setPlaying(!state.playing); }
+});
+addEventListener('hashchange', () => { const i = parseInt(location.hash.slice(1), 10) - 1; if (i >= 0 && i < 6 && i !== state.idx) pick(i, true); });
+
+const h = parseInt(location.hash.slice(1), 10);
+setSpeed(parseFloat(qs.get('speed')) || 1);
+pick(h >= 1 && h <= 6 ? h - 1 : 0, true);
+if (qs.has('t')) { state.u = parseFloat(qs.get('t')) || 0; setPlaying(false); render(state.u); }
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (state.playing) {
+    state.u += dt * state.speed;
+    if (state.u >= state.model.dur) { state.u = 0; state.first = false; rebuild(); }
+    render(state.u);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
