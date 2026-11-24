@@ -1,5 +1,7 @@
 package demo;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.http.HttpStatus;
@@ -9,6 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 @SpringBootApplication
 @RestController
 public class ServerApp {
+  private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
+
   public static void main(String[] args) {
     new SpringApplicationBuilder(ServerApp.class).properties("server.port=8096").run(args);
   }
@@ -44,6 +48,7 @@ public class ServerApp {
     double dice = Math.random();
     if (dice < 1 / 3.0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "your request is wrong; sending it again won't help");
     if (dice < 2 / 3.0) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "transient error, try again");
+    log.info("⬅️ 200 data");
     return "data";
   }
 }
