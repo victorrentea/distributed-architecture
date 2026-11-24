@@ -28,4 +28,11 @@ public class ServerApp {
     if (Math.random() < failRate) throw new IllegalStateException("server is having a bad day");
     return "data";
   }
+
+  /** a server that accepted the request and then never answers (stuck on a lock, a slow query...) */
+  @GetMapping("/hang")
+  String hang() throws InterruptedException {
+    Thread.sleep(3_600_000); // 1 hour
+    return "finally!";
+  }
 }

@@ -18,4 +18,10 @@ public class ClientApp {
   String call() {
     return "client got: " + server.get().uri("/data").retrieve().body(String.class);
   }
+
+  /** RestClient with its defaults: NO read timeout => the caller waits for as long as the server keeps it waiting */
+  @GetMapping("/no-timeout")
+  String noTimeout() {
+    return "client got: " + server.get().uri("/hang").retrieve().body(String.class);
+  }
 }
