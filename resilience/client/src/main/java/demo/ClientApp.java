@@ -51,7 +51,7 @@ public class ClientApp {
         .body(String.class);
   }
 
-  /** the server fails half of the time: try again, up to 3 times (see resilience4j.retry in application.properties) */
+  /** retried up to 3 times, but only on recoverable errors: 5xx yes, 4xx no (see resilience4j.retry in application.properties) */
   @Retry(name = "flaky")
   @GetMapping("/retry")
   String retry() {

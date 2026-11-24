@@ -2,7 +2,9 @@ package demo;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootApplication
 @RestController
@@ -36,10 +38,12 @@ public class ServerApp {
     return "finally!";
   }
 
-  /** a transient error (a blip in the network, a restart, a deadlock): half of the calls fail */
+  /** a third of the calls: 400, the caller's fault; a third: 503, a transient error; a third: OK */
   @GetMapping("/flaky")
   String flaky() {
-    if (Math.random() < 0.5) throw new IllegalStateException("transient error, try again");
+    double dice = Math.random();
+    if (dice < 1 / 3.0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "your request is wrong; sending it again won't help");
+    if (dice < 2 / 3.0) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "transient error, try again");
     return "data";
   }
 }
