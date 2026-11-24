@@ -1,0 +1,15 @@
+meta {
+  name: 0 chaos - server answers after 15s
+  type: http
+  seq: 0
+}
+
+post {
+  url: http://localhost:8096/chaos?delayMillis=15000
+  body: none
+  auth: none
+}
+
+params:query {
+  delayMillis: 15000
+}

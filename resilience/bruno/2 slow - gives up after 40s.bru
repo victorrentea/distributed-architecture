@@ -1,0 +1,11 @@
+meta {
+  name: 2 slow - gives up after 40s
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://localhost:8095/slow
+  body: none
+  auth: none
+}

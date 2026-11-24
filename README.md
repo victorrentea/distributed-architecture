@@ -11,5 +11,5 @@ GraphQL gateway (8080) over 2 services: customers (8081, itself GraphQL over H2/
 client (8095) calls server (8096) over REST: `GET :8095/call` → `GET :8096/data`.
 Break the server at runtime: `curl -X POST ':8096/chaos?delayMillis=3000&failRate=0.5'`
 `cd resilience && mvn package && java -jar <module>/target/<module>-1.jar`
-- `GET :8095/no-timeout` → `:8096/hang` (sleeps 1h): RestClient has no read timeout by default, so the caller hangs too
+- timeouts: 10s by default for every call (`spring.http.client.read-timeout`), 40s for `GET :8095/slow` → `:8096/hang` (sleeps 1h)
 Bruno collection in `resilience/bruno/`
