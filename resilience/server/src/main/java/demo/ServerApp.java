@@ -53,7 +53,7 @@ public class ServerApp {
     return "data";
   }
 
-  /** at most 3 calls every 10 seconds; the 4th gets 429 Too Many Requests at once (see resilience4j.ratelimiter in application.properties) */
+  /** at most 3000 calls every 10 seconds; the next ones get 429 Too Many Requests at once (see resilience4j.ratelimiter in application.properties) */
   @RateLimiter(name = "limited")
   @GetMapping("/limited")
   String limited() {
