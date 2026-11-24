@@ -1,5 +1,6 @@
 package demo;
 
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -48,6 +49,14 @@ public class ServerApp {
     double dice = Math.random();
     if (dice < 1 / 3.0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "your request is wrong; sending it again won't help");
     if (dice < 2 / 3.0) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "transient error, try again");
+    log.info("⬅️ 200 data");
+    return "data";
+  }
+
+  /** at most 3 calls every 10 seconds; the 4th gets 429 Too Many Requests at once (see resilience4j.ratelimiter in application.properties) */
+  @RateLimiter(name = "limited")
+  @GetMapping("/limited")
+  String limited() {
     log.info("⬅️ 200 data");
     return "data";
   }

@@ -1,5 +1,6 @@
 package demo;
 
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,13 @@ public class GlobalExceptionHandler {
   ResponseEntity<String> onResponseStatus(ResponseStatusException e) {
     log.warn("⬅️ {} {}", e.getStatusCode().value(), e.getReason());
     return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
+  }
+
+  /** the rate limiter refused the call: the caller is sending too much, it should slow down */
+  @ExceptionHandler(RequestNotPermitted.class)
+  ResponseEntity<String> onRateLimited(RequestNotPermitted e) {
+    log.warn("⬅️ 429 {}", e.getMessage());
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body("too many requests, slow down: " + e.getMessage());
   }
 
   @ExceptionHandler(Exception.class)
