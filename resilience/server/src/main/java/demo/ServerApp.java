@@ -35,4 +35,11 @@ public class ServerApp {
     Thread.sleep(3_600_000); // 1 hour
     return "finally!";
   }
+
+  /** a transient error (a blip in the network, a restart, a deadlock): half of the calls fail */
+  @GetMapping("/flaky")
+  String flaky() {
+    if (Math.random() < 0.5) throw new IllegalStateException("transient error, try again");
+    return "data";
+  }
 }

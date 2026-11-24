@@ -1,5 +1,6 @@
 package demo;
 
+import io.github.resilience4j.retry.annotation.Retry;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -46,6 +47,17 @@ public class ClientApp {
   String slow() {
     return "client got: " + patientServer.get()
         .uri("/hang")
+        .retrieve()
+        .body(String.class);
+  }
+
+  /** the server fails half of the time: try again, up to 3 times (see resilience4j.retry in application.properties) */
+  @Retry(name = "flaky")
+  @GetMapping("/retry")
+  String retry() {
+    System.out.println("calling /flaky ...");
+    return "client got: " + server.get()
+        .uri("/flaky")
         .retrieve()
         .body(String.class);
   }
