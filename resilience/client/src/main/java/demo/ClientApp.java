@@ -12,14 +12,19 @@ public class ClientApp {
     new SpringApplicationBuilder(ClientApp.class).properties("server.port=8095").run(args);
   }
 
-  private final RestClient server = RestClient.create("http://localhost:8096");
+  private final RestClient server;
+
+  // inject Spring Boot's builder (not RestClient.create()), so the spring.http.client.* timeouts apply
+  ClientApp(RestClient.Builder builder) {
+    this.server = builder.baseUrl("http://localhost:8096").build();
+  }
 
   @GetMapping("/call")
   String call() {
     return "client got: " + server.get().uri("/data").retrieve().body(String.class);
   }
 
-  /** RestClient with its defaults: NO read timeout => the caller waits for as long as the server keeps it waiting */
+  /** the server never answers, but the read timeout in application.properties cuts the wait after 10s */
   @GetMapping("/no-timeout")
   String noTimeout() {
     return "client got: " + server.get().uri("/hang").retrieve().body(String.class);
