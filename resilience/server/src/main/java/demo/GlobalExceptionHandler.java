@@ -1,5 +1,6 @@
 package demo;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,13 @@ public class GlobalExceptionHandler {
   ResponseEntity<String> onRateLimited(RequestNotPermitted e) {
     log.warn("⬅️ 429 {}", e.getMessage());
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body("too many requests, slow down: " + e.getMessage());
+  }
+
+  /** the bulkhead is full: the allowed number of calls are already running at this moment */
+  @ExceptionHandler(BulkheadFullException.class)
+  ResponseEntity<String> onBulkheadFull(BulkheadFullException e) {
+    log.warn("⬅️ 429 {}", e.getMessage());
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body("busy, another call is in progress: " + e.getMessage());
   }
 
   @ExceptionHandler(Exception.class)

@@ -1,5 +1,6 @@
 package demo;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,16 @@ public class ServerApp {
   @RateLimiter(name = "limited")
   @GetMapping("/limited")
   String limited() {
+    log.info("⬅️ 200 data");
+    return "data";
+  }
+
+  /** one call at a time: while it works (5s), a second concurrent call gets 429 at once (see resilience4j.bulkhead in application.properties) */
+  @Bulkhead(name = "single")
+  @GetMapping("/single")
+  String single() throws InterruptedException {
+    log.info("➡️ /single started, working 5s...");
+    Thread.sleep(5000);
     log.info("⬅️ 200 data");
     return "data";
   }
