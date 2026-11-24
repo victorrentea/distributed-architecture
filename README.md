@@ -6,3 +6,8 @@ GraphQL gateway (8080) over 2 services: customers (8081, itself GraphQL over H2/
 - everything from customers sits under `Customer.details`; its selection is forwarded as is, in one call
 - customers runs ONE SQL query, joining addresses only if they were asked for
 `cd graphql && mvn package && java -jar <module>/target/<module>-1.jar` · try it with the Bruno collection in `graphql/bruno/`
+
+## resilience/
+client (8095) calls server (8096) over REST: `GET :8095/call` → `GET :8096/data`.
+Break the server at runtime: `curl -X POST ':8096/chaos?delayMillis=3000&failRate=0.5'`
+`cd resilience && mvn package && java -jar <module>/target/<module>-1.jar`
